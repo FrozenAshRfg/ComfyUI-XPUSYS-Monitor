@@ -240,7 +240,7 @@ def _is_amd_rocme() -> bool:
     """
     try:
         import torch
-        if torch.version.roc is not None:
+        if getattr(torch.version, "roc", None) is not None:
             return True
         if getattr(torch.version, "hip", None):
             return True

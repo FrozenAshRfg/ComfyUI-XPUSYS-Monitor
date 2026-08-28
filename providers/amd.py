@@ -610,10 +610,17 @@ class AMDProvider(BaseGPUProvider):
                 "GPUPower",
                 -1.0,
             )
+            tgp_w = 0.0
+            try:
+                rng = support.GetGPUTotalBoardPowerRange() if support is not None else None
+                if rng and len(rng) >= 2 and rng[1] > 0:
+                    tgp_w = float(rng[1])
+            except Exception:
+                pass
             if board_power >= 0.0:
-                return (chip_power if chip_power >= 0.0 else board_power), board_power, True
+                return (chip_power if chip_power >= 0.0 else board_power), tgp_w, True
             if chip_power >= 0.0:
-                return chip_power, chip_power, True
+                return chip_power, tgp_w, True
             return -1.0, 0.0, False
         if self._amdsmi_ok and self._amdsmi_handle is not None:
             try:
