@@ -474,12 +474,21 @@ class AMDProvider(BaseGPUProvider):
                 pass
         if self._amdsmi_ok and self._amdsmi_handle is not None:
             try:
-                vram = self._amdsmi.amdsmi_get_gpu_vram_usage(self._amdsmi_handle)
+                # amdsmi_get_gpu_memory_usage/total return bytes; the legacy
+                # amdsmi_get_gpu_vram_usage returns MB (uint32) which underflows
+                # the bytes->GB conversion to ~0 on 16 GiB cards.
+                total_b = self._amdsmi.amdsmi_get_gpu_memory_total(
+                    self._amdsmi_handle, self._amdsmi.AmdSmiMemoryType.VRAM
+                )
+                used_b = self._amdsmi.amdsmi_get_gpu_memory_usage(
+                    self._amdsmi_handle, self._amdsmi.AmdSmiMemoryType.VRAM
+                )
                 gb = 1024 ** 3
-                total_gb = float(vram.get("vram_total", 0)) / gb
-                used_gb = float(vram.get("vram_used", 0)) / gb
-                free_gb = max(total_gb - used_gb, 0.0)
-                return free_gb, total_gb, used_gb
+                total_gb = float(total_b) / gb
+                used_gb = float(used_b) / gb
+                if total_gb > 0.0:
+                    free_gb = max(total_gb - used_gb, 0.0)
+                    return free_gb, total_gb, used_gb
             except Exception:
                 pass
         if self._rocm_ok:
@@ -526,39 +535,41 @@ class AMDProvider(BaseGPUProvider):
             return 0.0, 0.0
 
     def _read_gpu_load(self, support=None, metrics=None) -> float:
-        """Return GPU utilisation % via ADLX, amdsmi or rocm_smi."""
+        """Return GPU utilisation % via ADLX, amdsmi or rocm_smi (-1 = unavailable)."""
         if self._adlx_ok:
-            return self._read_adlx_metric(support, metrics, "IsSupportedGPUUsage", "GPUUsage", 0.0)
+            return self._read_adlx_metric(support, metrics, "IsSupportedGPUUsage", "GPUUsage", -1.0)
         if self._amdsmi_ok and self._amdsmi_handle is not None:
             try:
                 activity = self._amdsmi.amdsmi_get_gpu_activity(self._amdsmi_handle)
-                return float(activity.get("gfx_activity", 0.0))
+                value = activity.get("gfx_activity", -1.0)  # "N/A" when unsupported
+                return float(value) if isinstance(value, (int, float)) else -1.0
             except Exception:
-                return 0.0
+                return -1.0
         if not self._rocm_ok:
-            return 0.0
+            return -1.0
         try:
             import rocm_smi
             # GPU busy percentage
             return float(rocm_smi.getGpuBusyVdev(self._device_index))
         except Exception:
-            return 0.0
+            return -1.0
 
     def _read_gpu_freq_mhz(self, support=None, metrics=None) -> float:
-        """Return current GPU clock in MHz via ADLX, amdsmi or rocm_smi."""
+        """Return current GPU clock in MHz via ADLX, amdsmi or rocm_smi (-1 = unavailable)."""
         if self._adlx_ok:
-            return self._read_adlx_metric(support, metrics, "IsSupportedGPUClockSpeed", "GPUClockSpeed", 0.0)
+            return self._read_adlx_metric(support, metrics, "IsSupportedGPUClockSpeed", "GPUClockSpeed", -1.0)
         if self._amdsmi_ok and self._amdsmi_handle is not None:
             try:
                 clk = self._amdsmi.amdsmi_get_clock_info(
                     self._amdsmi_handle,
                     self._amdsmi.AmdSmiClkType.GFX,
                 )
-                return float(clk.get("cur_clk", 0.0))
+                value = clk.get("clk", -1.0)  # amdsmi key "clk" (MHz)
+                return float(value) if isinstance(value, (int, float)) else -1.0
             except Exception:
-                return 0.0
+                return -1.0
         if not self._rocm_ok:
-            return 0.0
+            return -1.0
         try:
             import rocm_smi
             # SCLK (system clock) in MHz
@@ -568,7 +579,7 @@ class AMDProvider(BaseGPUProvider):
                 sclk = int(sclk.split()[0])
             return float(sclk)
         except Exception:
-            return 0.0
+            return -1.0
 
     def _read_gpu_temp_c(self, support=None, metrics=None) -> float:
         """Return GPU temperature in °C via ADLX, amdsmi or rocm_smi."""
@@ -625,12 +636,18 @@ class AMDProvider(BaseGPUProvider):
         if self._amdsmi_ok and self._amdsmi_handle is not None:
             try:
                 power = self._amdsmi.amdsmi_get_power_info(self._amdsmi_handle)
-                # Field names vary across amdsmi versions (5.7 vs 7.x)
-                power_w = power.get("current_socket_power")
-                if power_w is None:
-                    power_w = power.get("average_socket_power")
-                power_w = float(power_w) if power_w is not None else -1.0
-                tgp_w = float(power.get("power_limit", 0.0) or 0.0)
+                # amdsmi marks unsupported fields with the string "N/A" and
+                # exposes per-family socket power fields (current: Mi300+,
+                # average: Navi + Mi) — all in Watts on Linux; power_limit is
+                # in microwatts.
+                power_w = -1.0
+                for key in ("current_socket_power", "average_socket_power", "socket_power"):
+                    value = power.get(key)
+                    if isinstance(value, (int, float)) and not isinstance(value, bool):
+                        power_w = float(value)
+                        break
+                limit = power.get("power_limit")
+                tgp_w = float(limit) / 1e6 if isinstance(limit, (int, float)) else 0.0
                 if power_w >= 0.0:
                     return power_w, tgp_w, True
                 return -1.0, tgp_w, False

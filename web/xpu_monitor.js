@@ -843,11 +843,13 @@ function renderRAM(snap) {
 }
 
 function renderEngine(snap) {
-  const load = snap.gpu_load_pct ?? 0;
+  const load = snap.gpu_load_pct ?? -1;
   const freq = snap.gpu_freq_mhz ?? 0;
   const temp = snap.gpu_temp_c   ?? -1;
   const cls  = load > 95 ? "xpusys-critical" : load > 80 ? "xpusys-warn" : "xpusys-ok";
-  let html = `GPU<span class="n-pct">${load.toFixed(1)}%</span>`;
+  let html = load >= 0
+    ? `GPU<span class="n-pct">${load.toFixed(1)}%</span>`
+    : `GPU<span class="n-pct">N/A</span>`;
   if (freq > 0)  html += `@<span class="n-mhz">${Math.round(freq)}MHz</span>`;
   if (temp >= 0) html += `|<span class="n-temp">${Math.round(temp)}°C</span>`;
   setHTML("engine", html, cls);
@@ -879,19 +881,23 @@ function renderPWR(snap) {
 
   if (!snap.power_available) {
     setVal("pwr", "PWR N/A", "xpusys-na");
-    const lock = document.createElement("span");
-    lock.className   = "xpusys-lock";
-    lock.textContent = "🔒";
-    lock.title       = "点击了解详情";
-    lock.addEventListener("click", e => {
-      e.stopPropagation();
-      const dev = shortDeviceName(snap.device_name);
-      const msg = snap.is_admin
-        ? "未找到功率域 — 请检查驱动版本。"
-        : `${dev} 功率数据需要管理员权限。\n\n以管理员身份运行 ComfyUI 即可启用实时功率监控。`;
-      alert("⚡ XPUSYSMonitor — 功率说明\n\n" + msg);
-    });
-    sec.el.appendChild(lock);
+    // Only Intel Arc genuinely needs admin privileges (Windows); other
+    // vendors report N/A for unavailable data, so show no lock here.
+    if (snap.gpu_vendor === "intel") {
+      const lock = document.createElement("span");
+      lock.className   = "xpusys-lock";
+      lock.textContent = "🔒";
+      lock.title       = "点击了解详情";
+      lock.addEventListener("click", e => {
+        e.stopPropagation();
+        const dev = shortDeviceName(snap.device_name);
+        const msg = snap.is_admin
+          ? "未找到功率域 — 请检查驱动版本。"
+          : `${dev} 功率数据需要管理员权限。\n\n以管理员身份运行 ComfyUI 即可启用实时功率监控。`;
+        alert("⚡ XPUSYSMonitor — 功率说明\n\n" + msg);
+      });
+      sec.el.appendChild(lock);
+    }
     return;
   }
 
@@ -1094,19 +1100,22 @@ function buildRAMTip(snap, eng) {
 }
 
 function buildEngineTip(snap, eng) {
-  const load = snap.gpu_load_pct ?? 0;
+  const load = snap.gpu_load_pct ?? -1;
   const freq = snap.gpu_freq_mhz ?? 0;
   const temp = snap.gpu_temp_c   ?? -1;
   const c    = load > 95 ? "var(--xpusys-crit)" : load > 80 ? "var(--xpusys-warn)" : "var(--xpusys-ok)";
   const tc   = temp > 85 ? "var(--xpusys-crit)" : temp > 70 ? "var(--xpusys-warn)" : "var(--xpusys-cyan)";
+  const loadRow = load >= 0
+    ? tipRow(eng ? "Load" : "负载", load.toFixed(1) + " %", c)
+    : tipRow(eng ? "Load" : "负载", "N/A", "var(--xpusys-text-dim)");
   if (eng) {
     return tipTitle("📊 GPU Engine")
-      + tipRow("Load",  load.toFixed(1) + " %", c)
+      + loadRow
       + (freq > 0  ? tipRow("Clock", Math.round(freq) + " MHz") : "")
       + (temp >= 0 ? tipRow("Temp",  Math.round(temp) + " °C", tc) : "");
   }
   return tipTitle("📊 GPU 引擎")
-    + tipRow("负载", load.toFixed(1) + " %", c)
+    + loadRow
     + (freq > 0  ? tipRow("频率", Math.round(freq) + " MHz") : "")
     + (temp >= 0 ? tipRow("温度", Math.round(temp) + " °C", tc) : "");
 }
@@ -1159,19 +1168,28 @@ function buildRSVTip(snap, eng) {
 }
 
 function buildPWRTip(snap, eng) {
-  if (!snap.power_available) {
-    const dev = shortDeviceName(snap.device_name);
-    if (eng) {
-      return tipTitle("⚡ Power — 🔒 Admin Only")
-        + `<div style="color:#888;margin-top:4px">${dev} power data requires admin privileges.<br>` +
-          `Run ComfyUI as Administrator to enable live power monitoring.</div>`;
+  const dev = shortDeviceName(snap.device_name);
+  if (!snap.power_available || snap.power_w < 0) {
+    // Intel Arc alone requires admin privileges; for every other vendor an
+    // unavailable power reading is plain "N/A", not a permission problem.
+    if (snap.power_available === false && snap.gpu_vendor === "intel") {
+      if (eng) {
+        return tipTitle("⚡ Power — 🔒 Admin Only")
+          + `<div style="color:#888;margin-top:4px">${dev} power data requires admin privileges.<br>` +
+            `Run ComfyUI as Administrator to enable live power monitoring.</div>`;
+      }
+      return tipTitle("⚡ 功率 — 🔒 需要管理员")
+        + `<div style="color:#888;margin-top:4px">${dev} 功率数据需要管理员权限。<br>` +
+          `以管理员身份运行 ComfyUI 即可启用实时功率监控。</div>`;
     }
-    return tipTitle("⚡ 功率 — 🔒 需要管理员")
-      + `<div style="color:#888;margin-top:4px">${dev} 功率数据需要管理员权限。<br>` +
-        `以管理员身份运行 ComfyUI 即可启用实时功率监控。</div>`;
+    if (eng) {
+      return tipTitle("⚡ Power — N/A")
+        + `<div style="color:#888;margin-top:4px">${dev} power data is currently unavailable.</div>`;
+    }
+    return tipTitle("⚡ 功率 — 不可用")
+      + `<div style="color:#888;margin-top:4px">${dev} 当前暂无法获取功率数据。</div>`;
   }
   const tgp = resolveTGP(snap);
-  const dev = shortDeviceName(snap.device_name);
   const pct = tgp > 0 ? snap.power_w / tgp : 0;
   const c   = (tgp > 0 && pct > 0.95) ? "var(--xpusys-crit)"
             : (tgp > 0 && pct > 0.80) ? "var(--xpusys-purple)"
