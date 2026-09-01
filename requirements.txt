@@ -10,7 +10,10 @@ pynvml
 ADLXPybind; platform_system == "Windows"
 
 # AMD GPU monitoring — secondary path on ROCm / Linux (official successor to rocm_smi)
-# Only needed when using AMD GPU with ROCm; safe to install on other systems
+# NOT auto-installed: amdsmi requires a proper ROCm environment and can fail on
+# plain pip install. Install manually on ROCm machines if needed:
+#   pip install amdsmi
+#   install docs: https://rocm.docs.amd.com/projects/amdsmi/en/latest/install/install.html
 # amdsmi
 
 # ---------------------------------------------------------------------------

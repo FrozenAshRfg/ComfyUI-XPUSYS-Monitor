@@ -6,6 +6,28 @@
 
 ## English
 
+### v1.0.8.2 — 2026-09-01
+
+#### 🐛 Bug Fixes
+
+- **Virtual memory (Commit) capsule empty on Linux**: The `虚拟内存 / Commit` capsule always read 0 on Ubuntu and other POSIX machines.
+  - Root cause: `_read_commit_charge()` used the Windows-only `GlobalMemoryStatusEx` API (`ctypes.windll` does not exist on Linux), which raised and fell back to `(0.0, 0.0)`. The function is shared by all three providers (Intel / NVIDIA / AMD), so any GPU on Linux was affected.
+  - Fix: on non-Windows the function now reads `psutil.swap_memory()` — the closest POSIX equivalent to "virtual memory" (the Swap column of `free`). Windows behavior is unchanged.
+  - Note: a machine with no swap configured still reads `0 / 0` — that is the truth (no swap space), not a read failure.
+
+---
+
+### v1.0.8.1 — 2026-08-29
+
+#### 🐛 Bug Fixes
+
+- **CPU frequency frozen on Windows**: The CPU capsule showed a constant frequency (e.g. `@2.90GHz`) that never changed during workflows.
+  - Root cause: `psutil.cpu_freq().current` always returns the maximum frequency on Windows (known psutil limitation — the standard Windows API does not expose the current CPU clock).
+  - Fix: on Windows the plugin now reads the real-time frequency via the PDH counter `\Processor Information(_Total)\% Processor Performance` (the same one Task Manager uses) — dual-sample delta multiplied by the base clock read from the registry (`HKLM\...\CentralProcessor\0\~MHz`, cached). Idle frequency now drops to the power-saving state and boosts during load, matching Task Manager.
+  - Falls back to psutil on non-Windows or if PDH is unavailable.
+
+---
+
 ### v1.0.8 — 2026-08-28
 
 #### ✨ New Features
@@ -225,6 +247,28 @@ Low-end consumer cards (A310, A370M, A350M) and the embedded E-series are exclud
 ---
 
 ## 中文
+
+### v1.0.8.2 — 2026-09-01
+
+#### 🐛 Bug 修复
+
+- **Linux 下虚拟内存（Commit）胶囊读不到数值**：Ubuntu 等 POSIX 系统上「虚拟内存」胶囊恒为 0。
+  - 根因：`_read_commit_charge()` 使用了 Windows 专属 API `GlobalMemoryStatusEx`（Linux 上没有 `ctypes.windll`），异常被吞掉后回退 `(0.0, 0.0)`。该函数被三家 provider（Intel / NVIDIA / AMD）共用，Linux 上任何显卡都会中招。
+  - 修复：非 Windows 平台改用 `psutil.swap_memory()` 读取——即 POSIX 语境下的「虚拟内存」（`free` 命令的 Swap 列）。Windows 行为不变。
+  - 注意：未配置 swap 的机器仍会显示 `0 / 0`——这是真实情况（没有交换空间），并非读取失败。
+
+---
+
+### v1.0.8.1 — 2026-08-29
+
+#### 🐛 Bug 修复
+
+- **Windows 上 CPU 频率固定不变**：CPU 胶囊显示恒定频率（如 `@2.90GHz`），运行工作流时毫无变化。
+  - 根因：`psutil.cpu_freq().current` 在 Windows 上永远返回最大频率（psutil 已知限制——Windows 标准 API 不暴露实时 CPU 频率）。
+  - 修复：Windows 下改用 PDH 计数器 `\Processor Information(_Total)\% Processor Performance`（任务管理器同款）读取实时频率——双采样差值 × 注册表基准频率（`HKLM\...\CentralProcessor\0\~MHz`，缓存）。空闲时降至节能频率、负载时随 boost 上浮，与任务管理器一致。
+  - 非 Windows 或 PDH 不可用时自动回退 psutil。
+
+---
 
 ### v1.0.8 — 2026-08-28
 
