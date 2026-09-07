@@ -248,6 +248,15 @@ Low-end consumer cards (A310, A370M, A350M) and the embedded E-series are exclud
 
 ## 中文
 
+### v1.0.9 — 2026-09-07
+
+#### 📦 元数据 / 发布
+
+- **版本号迁移为严格三段 semver（X.Y.Z）**：v1.0.9 对应此前标记为 v1.0.8.2 的代码——无功能变化。四段格式（`1.0.8.x`）废弃，因为 ComfyUI Registry 强制要求 `X.Y.Z`。
+- **为发布到 ComfyUI Registry 做准备**：`pyproject.toml` 补充操作系统 / GPU 加速器 classifiers；将 `ADLXPybind`（Windows 限定）依赖从 `requirements.txt` 同步进 `pyproject.toml`；新增 `.comfyignore`，确保截图与内部文档不进入 registry 归档。
+
+---
+
 ### v1.0.8.2 — 2026-09-01
 
 #### 🐛 Bug 修复
