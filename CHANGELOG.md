@@ -6,6 +6,23 @@
 
 ## English
 
+### v1.0.10 — 2026-09-07
+
+#### 📦 Meta / Publishing
+
+- **Updated Registry description**: refined the `pyproject.toml` description — keeps the Intel Arc-first positioning (NVIDIA / AMD as secondary support) while adding telemetry keywords (utilization, temperature, VRAM, clock, power) for better searchability in the Registry and ComfyUI-Manager. Metadata-only change, no code changes.
+
+---
+
+### v1.0.9 — 2026-09-07
+
+#### 📦 Meta / Publishing
+
+- **Version format migrated to strict three-segment semver (X.Y.Z)**: v1.0.9 corresponds to the code previously tagged v1.0.8.2 — no functional changes. The four-segment format (`1.0.8.x`) is retired because the ComfyUI Registry requires `X.Y.Z`.
+- **Prepared for ComfyUI Registry publishing**: added OS / GPU-accelerator classifiers to `pyproject.toml`, synced the `ADLXPybind` Windows dependency into `pyproject.toml` (was only in `requirements.txt`), and added `.comfyignore` so screenshots and internal docs stay out of the registry archive.
+
+---
+
 ### v1.0.8.2 — 2026-09-01
 
 #### 🐛 Bug Fixes
@@ -247,6 +264,14 @@ Low-end consumer cards (A310, A370M, A350M) and the embedded E-series are exclud
 ---
 
 ## 中文
+
+### v1.0.10 — 2026-09-07
+
+#### 📦 元数据 / 发布
+
+- **更新 Registry 描述**：优化 `pyproject.toml` description——保留 Intel Arc-first 定位（NVIDIA / AMD 为次要支持），补充遥测关键词（utilization、temperature、VRAM、clock、power），提升在 Registry 与 ComfyUI-Manager 中的可搜索性。仅元数据变更，无代码变化。
+
+---
 
 ### v1.0.9 — 2026-09-07
 
