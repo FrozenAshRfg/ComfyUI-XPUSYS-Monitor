@@ -748,23 +748,58 @@ class _LevelZeroSysman:
             return -1.0
 
     def read_gpu_load_pct(self) -> float:
-        """Return GPU utilisation %, or 0.0."""
+        """Return GPU utilisation %, or 0.0.
+
+        Reports the BUSIEST engine group, not a fixed index. Matches Intel's
+        own semantics (xpu-smi reports "the busiest engine rather than the
+        average across all engines") and Task Manager.
+
+        为什么不固定读 engine[0]（B580 / driver 32.0.101.8992 实测）：
+          engine[0] type=0x00  → 满载仅 11.1%
+          engine[1] type=0x01 OTHER   → 满载 100%（真正干活的）
+          engine[2] type=0x02 COMPUTE → 满载 0.0%
+        引擎的 type 标志与实际负载不符，因此不能靠 type 挑选引擎；
+        遍历全部引擎组取最大值是唯一稳健的读法。
+
+        真实工作流只读采样（ComfyUI 采样运行中，未干扰）：
+          engine[1] 60~66%  →  engine[0] 仅 8.4~8.8%（固定约 1/8 衰减）
+        engine[0] 并非"不动"，而是方向相关、幅度被压掉一个数量级——
+        这正是用户反馈"一进采样也会涨、但数值对不上任务管理器"的原因。
+        注意：真实扩散工作流峰值通常 60~70%（step 间有 kernel 间隙/同步开销），
+        不会顶到 100%；100% 只在纯算力压满的合成负载下出现。
+        """
         if not self._available or not self._engine_handles:
             return 0.0
         try:
             fn = self._lib.zesEngineGetActivity
             fn.restype  = ctypes.c_int
             fn.argtypes = [ctypes.c_void_p, ctypes.POINTER(_ZesEngineStats)]
-            s1 = _ZesEngineStats()
-            if fn(self._engine_handles[0], ctypes.byref(s1)) != ZE_RESULT_SUCCESS:
+
+            def _snapshot() -> dict:
+                """activeTime/timestamp for every engine group that answers."""
+                out = {}
+                for idx, handle in enumerate(self._engine_handles):
+                    stat = _ZesEngineStats()
+                    if fn(handle, ctypes.byref(stat)) == ZE_RESULT_SUCCESS:
+                        out[idx] = stat
+                return out
+
+            s1 = _snapshot()
+            if not s1:
                 return 0.0
             time.sleep(0.05)
-            s2 = _ZesEngineStats()
-            if fn(self._engine_handles[0], ctypes.byref(s2)) != ZE_RESULT_SUCCESS:
-                return 0.0
-            dA = s2.activeTime - s1.activeTime
-            dT = s2.timestamp  - s1.timestamp
-            return min(100.0, (dA / dT) * 100.0) if dT > 0 else 0.0
+            s2 = _snapshot()
+
+            best = 0.0
+            for idx, a in s1.items():
+                b = s2.get(idx)
+                if b is None:
+                    continue
+                dA = b.activeTime - a.activeTime
+                dT = b.timestamp  - a.timestamp
+                if dT > 0:
+                    best = max(best, (dA / dT) * 100.0)
+            return min(100.0, best)
         except Exception:
             return 0.0
 
