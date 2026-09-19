@@ -1,9 +1,22 @@
 [project]
 name = "ComfyUI-XPUSYS-Monitor"
-version = "1.0.8.2"
-description = "Intel Arc-first ComfyUI monitor with real-time GPU/CPU/RAM stats and an exclusive workflow execution success rate predictor. NVIDIA (CUDA) and AMD (ROCm) fully supported."
+# Strict three-segment semver (X.Y.Z) as required by the ComfyUI Registry.
+# v1.0.9 == code previously tagged v1.0.8.2 (four-segment format retired).
+version = "1.0.11"
+description = "Intel Arc-first ComfyUI monitor for real-time GPU/CPU/RAM telemetry: utilization, temperature, VRAM, clock and power, plus an exclusive workflow success-rate predictor. NVIDIA (CUDA) and AMD (ROCm) fully supported."
 license = { text = "MIT" }
-dependencies = ["psutil", "pynvml"]
+dependencies = [
+    "psutil",
+    "pynvml",
+    'ADLXPybind; platform_system == "Windows"',
+]
+classifiers = [
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Environment :: GPU :: Intel Arc",
+    "Environment :: GPU :: NVIDIA CUDA",
+    "Environment :: GPU :: AMD ROCm",
+]
 
 [project.urls]
 Repository = "https://github.com/allanmeng/ComfyUI-XPUSYS-Monitor"
@@ -11,4 +24,3 @@ Repository = "https://github.com/allanmeng/ComfyUI-XPUSYS-Monitor"
 [tool.comfy]
 PublisherId = "allanmeng"
 DisplayName = "ComfyUI-XPUSYS-Monitor"
-Icon = ""

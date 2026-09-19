@@ -6,6 +6,36 @@
 
 ## English
 
+### v1.0.11 — 2026-09-17
+
+#### 🐛 Bug Fixes
+
+- **GPU load always under-reported on Intel Arc (fixed engine index)**: `read_gpu_load_pct()` read only engine group `[0]`. Measured on an Arc B580 (driver 32.0.101.8992) under a pure fp16 matmul load, engine `[0]` reports **11.1 %** while another group runs at **100 %** — so the GPU capsule, its tooltip and the Spark Monitor load curve all showed a ~9× understated value, and the `>95 %` critical thresholds could never trigger.
+  - Fix: the function now scans **all** engine groups and reports the busiest one, matching Intel's own `xpu-smi` semantics ("busiest engine rather than the average across all engines") and Windows Task Manager.
+  - Note: the engine `type` flag is **not** a reliable selector — the group labelled `COMPUTE` stayed at 0 % under compute load while the group labelled `OTHER` ran at 100 %, so taking the maximum is the only robust approach.
+  - Verified on hardware: idle 0.0 % → load 99.8 % → back to 0.0 % after the load stops (synthetic fp16 matmul).
+  - Verified under a real ComfyUI sampling job (read-only probe): the busiest engine reads **60–66 %** where the old fixed-index logic reported only **8.4–8.8 %** — the defect affects normal workflow execution, not just synthetic load. Note that a real diffusion workload peaks around 60–70 % rather than 100 % (kernel gaps and host sync between steps), so a high-but-not-maxed reading is expected and correct.
+- Affected display only the GPU-related views (capsule value, capsule color grading, GPU tooltip, Spark Monitor load curve). VRAM / RSV / PWR / CPU / RAM capsules, the success-rate predictor and the NVIDIA / AMD providers are untouched.
+
+---
+
+### v1.0.10 — 2026-09-07
+
+#### 📦 Meta / Publishing
+
+- **Updated Registry description**: refined the `pyproject.toml` description — keeps the Intel Arc-first positioning (NVIDIA / AMD as secondary support) while adding telemetry keywords (utilization, temperature, VRAM, clock, power) for better searchability in the Registry and ComfyUI-Manager. Metadata-only change, no code changes.
+
+---
+
+### v1.0.9 — 2026-09-07
+
+#### 📦 Meta / Publishing
+
+- **Version format migrated to strict three-segment semver (X.Y.Z)**: v1.0.9 corresponds to the code previously tagged v1.0.8.2 — no functional changes. The four-segment format (`1.0.8.x`) is retired because the ComfyUI Registry requires `X.Y.Z`.
+- **Prepared for ComfyUI Registry publishing**: added OS / GPU-accelerator classifiers to `pyproject.toml`, synced the `ADLXPybind` Windows dependency into `pyproject.toml` (was only in `requirements.txt`), and added `.comfyignore` so screenshots and internal docs stay out of the registry archive.
+
+---
+
 ### v1.0.8.2 — 2026-09-01
 
 #### 🐛 Bug Fixes
@@ -247,6 +277,36 @@ Low-end consumer cards (A310, A370M, A350M) and the embedded E-series are exclud
 ---
 
 ## 中文
+
+### v1.0.11 — 2026-09-17
+
+#### 🐛 问题修复
+
+- **Intel Arc 显卡负载始终偏低（固定引擎索引）**：`read_gpu_load_pct()` 只读第 `[0]` 个引擎组。在 Arc B580（驱动 32.0.101.8992）上以纯 fp16 矩阵乘法压满实测：engine `[0]` 仅报 **11.1%**，而另一个引擎组跑到 **100%** —— 导致 GPU 胶囊、其 tooltip 以及火花监控的负载曲线都只显示真实值的约 1/9，`>95%` 的临界告警也永远无法触发。
+  - 修复：改为遍历**全部**引擎组并取最忙的那一个，与 Intel 官方 `xpu-smi` 语义（"busiest engine" 而非全引擎平均）及任务管理器一致。
+  - 注意：引擎的 `type` 标志不可作为挑选依据——标为 `COMPUTE` 的引擎组在计算负载下保持 0%，而标为 `OTHER` 的才是满载 100% 的那个，因此取最大值是唯一稳健的做法。
+  - 实机验证：空闲 0.0% → 满载 99.8% → 负载停止后回落 0.0%（合成 fp16 矩阵乘法）。
+  - 真实工作流验证（只读采样，未干扰运行）：采样过程中最忙引擎读到 **60~66%**，而旧的固定索引逻辑仅报 **8.4~8.8%** —— 说明该缺陷在日常工作流执行中同样存在，并非只出现在合成负载下。注意：真实扩散工作流的峰值通常在 60~70% 而非 100%（step 之间存在 kernel 间隙与主机同步开销），因此「偏高但不满」是正常且正确的读数。
+- 影响范围仅限 GPU 相关显示（胶囊数值、胶囊配色分级、GPU tooltip、火花监控负载曲线）。VRAM / RSV / PWR / CPU / RAM 胶囊、成功率预测器以及 NVIDIA / AMD provider 均不受影响。
+
+---
+
+### v1.0.10 — 2026-09-07
+
+#### 📦 元数据 / 发布
+
+- **更新 Registry 描述**：优化 `pyproject.toml` description——保留 Intel Arc-first 定位（NVIDIA / AMD 为次要支持），补充遥测关键词（utilization、temperature、VRAM、clock、power），提升在 Registry 与 ComfyUI-Manager 中的可搜索性。仅元数据变更，无代码变化。
+
+---
+
+### v1.0.9 — 2026-09-07
+
+#### 📦 元数据 / 发布
+
+- **版本号迁移为严格三段 semver（X.Y.Z）**：v1.0.9 对应此前标记为 v1.0.8.2 的代码——无功能变化。四段格式（`1.0.8.x`）废弃，因为 ComfyUI Registry 强制要求 `X.Y.Z`。
+- **为发布到 ComfyUI Registry 做准备**：`pyproject.toml` 补充操作系统 / GPU 加速器 classifiers；将 `ADLXPybind`（Windows 限定）依赖从 `requirements.txt` 同步进 `pyproject.toml`；新增 `.comfyignore`，确保截图与内部文档不进入 registry 归档。
+
+---
 
 ### v1.0.8.2 — 2026-09-01
 

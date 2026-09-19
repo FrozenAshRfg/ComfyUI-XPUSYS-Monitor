@@ -1,0 +1,11 @@
+# ComfyUI Registry archive exclusions (layers on top of .gitignore)
+# Files below ARE tracked by git but are NOT needed in the registry archive.
+
+# UI screenshots (README images would break, but installs are unaffected)
+screenshot/
+
+# Internal docs
+docs/
+
+# Workflow scaffolding
+.github/
